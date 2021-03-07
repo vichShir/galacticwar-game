@@ -1,4 +1,4 @@
-package galacticwar;
+package game.galacticwar;
 import java.applet.*;
 import java.awt.*;
 import java.awt.event.*;

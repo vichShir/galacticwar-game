@@ -1,4 +1,4 @@
-package galacticwar;
+package game.galacticwar;
 import java.awt.Polygon;
 import java.awt.Rectangle;
 
