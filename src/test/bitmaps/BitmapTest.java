@@ -11,7 +11,7 @@ import java.util.*;
 
 public class BitmapTest extends Applet implements Runnable
 {
-	private static final long serialVersionUID = 1064902970018271331L;
+	private static final long serialVersionUID = 1L;
 	
 	int screenWidth = 640;
 	int screenHeight = 480;
@@ -61,7 +61,7 @@ public class BitmapTest extends Applet implements Runnable
 		{
 			try
 			{
-				Thread.sleep(20);
+				Thread.sleep(1000);
 			}
 			catch(InterruptedException e)
 			{
