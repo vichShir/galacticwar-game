@@ -24,14 +24,16 @@ public class RandomImages extends Applet
             url = this.getClass().getResource(filename);
         }
         catch (Exception e) { }
-        System.out.println(url);
         return url; 
     }
 
     // Applet init event
     public void init()
     {
-        image = getImage(getURL("spaceship.png"));
+        // Using toolkit
+        Toolkit tk = Toolkit.getDefaultToolkit();
+        image = tk.getImage(getURL("spaceship.png"));
+        //image = getImage(getURL("spaceship.png"));
     }
 
     // Applet paint event
