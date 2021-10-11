@@ -26,7 +26,7 @@ public class DrawImage extends Applet
     // Applet init event
     public void init()
     {
-        image = getImage(getURL("castle.png"));
+        image = getImage(getURL("images/castle.png"));
     }
 
     // Applet paint event

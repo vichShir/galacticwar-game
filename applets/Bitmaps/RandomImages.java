@@ -32,7 +32,7 @@ public class RandomImages extends Applet
     {
         // Using toolkit
         Toolkit tk = Toolkit.getDefaultToolkit();
-        image = tk.getImage(getURL("spaceship.png"));
+        image = tk.getImage(getURL("images/spaceship.png"));
         //image = getImage(getURL("spaceship.png"));
     }
 
