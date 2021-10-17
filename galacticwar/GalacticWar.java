@@ -1,5 +1,5 @@
 /*******************************************************
- * GALACTIC WAR, Capitulo 12
+ * GALACTIC WAR, Capitulo 13
  *******************************************************/
 
 import java.applet.*;
@@ -27,8 +27,9 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 	static double ACCELERATION = 0.05;
 	
 	// Sprite state values
-	static int SPRITE_NORMAL = 0;
-	static int SPRITE_COLLIDED = 1;
+	static int STATE_NORMAL = 0;
+	static int STATE_COLLIDED = 1;
+	static int STATE_EXPLODING = 2;
 
 	// The main thread becomes the game loop
 	Thread gameloop;
@@ -40,6 +41,7 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 	// Various toggles
 	boolean showBounds = true;
 	boolean collisionTesting = true;
+	long collisionTimer = 0;
 
 	// Define the game objects
 	ImageEntity background;
@@ -47,6 +49,7 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 	Sprite[] ast = new Sprite[ASTEROIDS];
 	Sprite[] bullet = new Sprite[BULLETS];
 	int currentBullet = 0;
+	AnimatedSprite explosion;
 	
 	// Create a random number generator
 	Random rand = new Random();
@@ -114,6 +117,12 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
         // Load sound files
         shoot = new SoundClip("media/sounds/shoot.wav");
         explode = new SoundClip("media/sounds/explode.wav");
+
+		// Load the explosion
+		explosion = new AnimatedSprite(this, g2d);
+		explosion.load("media/images/explosion.png", 4, 4, 96, 96);
+		explosion.setFrameDelay(2);
+		explosion.setAlive(false);
 		
 		// Start the user input listener
 		addKeyListener(this);
@@ -136,9 +145,10 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 		// Draw the background
 		g2d.drawImage(background.getImage(), 0, 0, SCREENWIDTH - 1, SCREENHEIGHT - 1, this);
 
-		// Draw the games graphics
+		// Draw the games graphics drawAsteroids();
 		drawShip();
 		drawBullets();
+		drawExplosions();
 		drawAsteroids();
 
 		// Print status information on the screen
@@ -149,6 +159,13 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 		g2d.drawString("Ship: " + x + "," + y, 5, 25);
 		g2d.drawString("Move angle: " + Math.round(ship.moveAngle()) + 90, 5, 40);
 		g2d.drawString("Face angle: " + Math.round(ship.faceAngle()), 5, 55);
+
+		if(ship.state() == STATE_NORMAL)
+			g2d.drawString("State: NORMAL", 5, 70);
+		else if(ship.state() == STATE_COLLIDED)
+			g2d.drawString("State: COLLIDED", 5, 70);
+		else if(ship.state() == STATE_EXPLODING)
+			g2d.drawString("State: EXPLODING", 5, 70);
 
 		if(showBounds)
 		{
@@ -178,7 +195,7 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
         // Draw bounding rectangle around ship
         if(showBounds)
         {
-            if(ship.state() == SPRITE_COLLIDED)
+            if(ship.state() == STATE_COLLIDED)
 				ship.drawBounds(Color.RED);
 			else
 				ship.drawBounds(Color.BLUE);
@@ -201,7 +218,7 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 				bullet[n].draw();
 				if(showBounds)
 				{
-					if(bullet[n].state() == SPRITE_COLLIDED)
+					if(bullet[n].state() == STATE_COLLIDED)
 						bullet[n].drawBounds(Color.RED);
 					else
 						bullet[n].drawBounds(Color.BLUE);
@@ -226,11 +243,29 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 				ast[n].draw();
 				if(showBounds)
 				{
-					if(ast[n].state() == SPRITE_COLLIDED)
+					if(ast[n].state() == STATE_COLLIDED)
 						ast[n].drawBounds(Color.RED);
 					else
 						ast[n].drawBounds(Color.BLUE);
 				}
+			}
+		}
+	}
+
+	public void drawExplosions()
+	{
+		// Explosions don't need separate update method
+		if(explosion.alive())
+		{
+			explosion.updateAnimation();
+			if(explosion.currentFrame() == explosion.totalFrames() - 1)
+			{
+				explosion.setCurrentFrame(0);
+				explosion.setAlive(false);
+			}
+			else
+			{
+				explosion.draw();
 			}
 		}
 	}
@@ -298,7 +333,13 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 		updateShip();
 		updateBullets();
 		updateAsteroids();
-		if(collisionTesting) checkCollisions();
+		if(collisionTesting)
+		{
+			checkCollisions();
+			handleShipCollisions();
+			handleBulletCollisions();
+			handleAsteroidCollisions();
+		}
 	}
 	
 	/*
@@ -323,7 +364,7 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 			newy = -10;
 
 		ship.setPosition(new Point2D(newx, newy));
-		ship.setState(SPRITE_NORMAL);
+		ship.setState(STATE_NORMAL);
 	}
 	
 	/*
@@ -355,7 +396,7 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 					bullet[n].setAlive(false);
 				}
 
-				bullet[n].setState(SPRITE_NORMAL);
+				bullet[n].setState(STATE_NORMAL);
 			}
 		}
 	}
@@ -391,7 +432,7 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 					newy = -h;
 
 				ast[n].setPosition(new Point2D(newx, newy));
-				ast[n].setState(SPRITE_NORMAL);
+				ast[n].setState(STATE_NORMAL);
 			}
 		}
 	}
@@ -418,8 +459,8 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 						// Collision?
 						if(ast[m].collidesWith(bullet[n]))
 						{
-							bullet[n].setState(SPRITE_COLLIDED);
-							ast[m].setState(SPRITE_COLLIDED);
+							bullet[n].setState(STATE_COLLIDED);
+							ast[m].setState(STATE_COLLIDED);
 							explode.play();
 						}
 					}
@@ -436,10 +477,62 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 			{
 				if(ship.collidesWith(ast[m]))
 				{
-					ast[m].setState(SPRITE_COLLIDED);
-					ship.setState(SPRITE_COLLIDED);
+					ast[m].setState(STATE_COLLIDED);
+					ship.setState(STATE_COLLIDED);
 					explode.play();
 				}
+			}
+		}
+	}
+
+	public void handleShipCollisions()
+	{
+		if(ship.state() == STATE_COLLIDED)
+		{
+			collisionTimer = System.currentTimeMillis();
+			ship.setVelocity(new Point2D(0, 0));
+			ship.setState(STATE_EXPLODING);
+			startExplosion(ship);
+		}
+		else if(ship.state() == STATE_EXPLODING)
+		{
+			if(collisionTimer + 3000 < System.currentTimeMillis())
+			{
+				ship.setState(STATE_NORMAL);
+			}
+		}
+	}
+
+	public void startExplosion(Sprite sprite)
+	{
+		if(!explosion.alive())
+		{
+			double x = sprite.position().X() - sprite.getBounds().width / 2;
+			double y = sprite.position().Y() - sprite.getBounds().height / 2;
+			explosion.setPosition(new Point2D(x, y));
+			explosion.setCurrentFrame(0);
+			explosion.setAlive(true);
+		}
+	}
+
+	public void handleBulletCollisions()
+	{
+		for(int n = 0; n < BULLETS; n++)
+		{
+			if(bullet[n].state() == STATE_COLLIDED)
+			{
+				// Nothing to do yet
+			}
+		}
+	}
+
+	public void handleAsteroidCollisions()
+	{
+		for(int n = 0; n < ASTEROIDS; n++)
+		{
+			if(ast[n].state() == STATE_COLLIDED)
+			{
+				// Nothing to do yet
 			}
 		}
 	}
