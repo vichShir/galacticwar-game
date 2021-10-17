@@ -1,5 +1,5 @@
 /*******************************************************
- * GALACTIC WAR, Capitulo 11
+ * GALACTIC WAR, Capitulo 12
  *******************************************************/
 
 import java.applet.*;
@@ -16,39 +16,51 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 {
     private static final long serialVersionUID = 1L;
 
+	// Global constants
+	static int SCREENWIDTH = 800;
+	static int SCREENHEIGHT = 600;
+	static int CENTERX = SCREENWIDTH / 2;
+	static int CENTERY = SCREENHEIGHT / 2;
+	static int ASTEROIDS = 10;
+	static int BULLETS = 10;
+	static int BULLET_SPEED = 4;
+	static double ACCELERATION = 0.05;
+	
+	// Sprite state values
+	static int SPRITE_NORMAL = 0;
+	static int SPRITE_COLLIDED = 1;
+
 	// The main thread becomes the game loop
 	Thread gameloop;
 	
-	// Use this as a double buffer
+	// Double buffer objects
 	BufferedImage backbuffer;
-	
-	// The main drawing object for the back buffer
 	Graphics2D g2d;
 	
-	// Toggle for drawing bounding boxes
+	// Various toggles
 	boolean showBounds = true;
-	
-	// Create the asteroid array
-	int ASTEROIDS = 20;
-	Asteroid[] ast = new Asteroid[ASTEROIDS];
-	
-	// Create the bullet array
-	int BULLETS = 10;
-	Bullet[] bullet = new Bullet[BULLETS];
+	boolean collisionTesting = true;
+
+	// Define the game objects
+	ImageEntity background;
+	Sprite ship;
+	Sprite[] ast = new Sprite[ASTEROIDS];
+	Sprite[] bullet = new Sprite[BULLETS];
 	int currentBullet = 0;
-	
-	// The player's ship
-	ImageEntity ship = new ImageEntity(this);
-	
-	// Create the identity transform(0,0)
-	AffineTransform identity = new AffineTransform();
 	
 	// Create a random number generator
 	Random rand = new Random();
 
-    // Load sound effects
-    SoundClip shoot;
+	// Define the sound effects objects
+	SoundClip shoot;
     SoundClip explode;
+    
+	// Simple way to handle multiple keypress
+	boolean keyDown, keyUp, keyLeft, keyRight, keyFire;
+
+	// Frame rate counter
+	int frameCount = 0, frameRate = 0;
+	long startTime = System.currentTimeMillis();
 	
 	/*
 	 * Applet init event
@@ -58,30 +70,45 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 		// Create the back buffer for smooth graphics
 		backbuffer = new BufferedImage(640, 480, BufferedImage.TYPE_INT_RGB);
 		g2d = backbuffer.createGraphics();
+
+		// Load the background image
+		background = new ImageEntity(this);
+		background.load("media/images/bluespace.png");
 		
 		// Set up the ship
-		ship.setX(320);
-		ship.setY(240);
-        ship.load("media/images/spaceship1.png");
-        ship.setGraphics(g2d);
+		ship = new Sprite(this, g2d);
+        ship.load("media/images/spaceship.png");
+        ship.setPosition(new Point2D(CENTERX, CENTERY));
+		ship.setAlive(true);
 		
 		// Set up the bullets
 		for(int n = 0; n < BULLETS; n++)
 		{
-			bullet[n] = new Bullet();
+			bullet[n] = new Sprite(this, g2d);
+			bullet[n].load("media/images/plasmashot.png");
 		}
 		
-		// Create the asteroids
+		// Set up the asteroids
 		for(int n = 0; n < ASTEROIDS; n++)
 		{
-			ast[n] = new Asteroid();
-			ast[n].setRotationVelocity(rand.nextInt(3)+1);
-			ast[n].setX((double)rand.nextInt(600)+20);
-			ast[n].setY((double)rand.nextInt(440)+20);
+			ast[n] = new Sprite(this, g2d);
+			ast[n].setAlive(true);
+			// Load the asteroid image
+			int i = rand.nextInt(5) + 1;
+			ast[n].load("media/images/asteroid" + i + ".png");
+			// Set to a random position on the screen
+			int x = rand.nextInt(SCREENWIDTH);
+			int y = rand.nextInt(SCREENHEIGHT);
+			ast[n].setPosition(new Point2D(x, y));
+			// Set rotation angles to a random value
+			ast[n].setFaceAngle(rand.nextInt(360));
 			ast[n].setMoveAngle(rand.nextInt(360));
-			double ang = ast[n].getMoveAngle() - 90;
-			ast[n].setVelX(calcAngleMoveX(ang));
-			ast[n].setVelY(calcAngleMoveY(ang));
+			ast[n].setRotationRate(rand.nextDouble());
+			// Set velocity based on movement direction
+			double ang = ast[n].moveAngle() - 90;
+			double velx = calcAngleMoveX(ang);
+			double vely = calcAngleMoveY(ang);
+			ast[n].setVelocity(new Point2D(velx, vely));
 		}
 
         // Load sound files
@@ -97,25 +124,45 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 	 */
 	public void update(Graphics g)
 	{
-		//start off  transforms at identity
-		g2d.setTransform(identity);
-		
-		//erase the background
-		g2d.setPaint(Color.BLACK);
-		g2d.fillRect(0, 0, getSize().width, getSize().height);
-		
-		//print some status information
-		g2d.setColor(Color.WHITE);
-		g2d.drawString("Ship: " + Math.round(ship.getX()) + "," + Math.round(ship.getY()), 5, 10);
-		g2d.drawString("Move angle: " + Math.round(ship.getMoveAngle()) + 90, 5, 25);
-		g2d.drawString("Face angle: " + Math.round(ship.getFaceAngle()), 5, 40);
-		
-		//draw the games graphics
+		// Calculate frame rate
+		frameCount++;
+		if(System.currentTimeMillis() > startTime + 1000)
+		{
+			startTime = System.currentTimeMillis();
+			frameRate = frameCount;
+			frameCount = 0;
+		}
+
+		// Draw the background
+		g2d.drawImage(background.getImage(), 0, 0, SCREENWIDTH - 1, SCREENHEIGHT - 1, this);
+
+		// Draw the games graphics
 		drawShip();
 		drawBullets();
 		drawAsteroids();
+
+		// Print status information on the screen
+		g2d.setColor(Color.WHITE);
+		g2d.drawString("FPS: " + frameRate, 5, 10);
+		long x = Math.round(ship.position().X());
+		long y = Math.round(ship.position().Y());
+		g2d.drawString("Ship: " + x + "," + y, 5, 25);
+		g2d.drawString("Move angle: " + Math.round(ship.moveAngle()) + 90, 5, 40);
+		g2d.drawString("Face angle: " + Math.round(ship.faceAngle()), 5, 55);
+
+		if(showBounds)
+		{
+			g2d.setColor(Color.GREEN);
+			g2d.drawString("BOUNDING BOXES", SCREENWIDTH-150, 10);
+		}
+
+		if(collisionTesting)
+		{
+			g2d.setColor(Color.GREEN);
+			g2d.drawString("COLLISION TESTING", SCREENWIDTH-150, 25);
+		}
 		
-		//repaint the applet window
+		// Repaint the applet window
 		paint(g);
 	}
 	
@@ -124,16 +171,17 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 	 */
 	public void drawShip()
 	{
-        // Transform and draw the ship
+        // Set the transform for the image
         ship.transform();
         ship.draw();
 
         // Draw bounding rectangle around ship
         if(showBounds)
         {
-            g2d.setTransform(identity);
-            g2d.setColor(Color.BLUE);
-            g2d.draw(ship.getBounds());
+            if(ship.state() == SPRITE_COLLIDED)
+				ship.drawBounds(Color.RED);
+			else
+				ship.drawBounds(Color.BLUE);
         }
 	}
 	
@@ -142,17 +190,22 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 	 */
 	public void drawBullets()
 	{
-		//iterate through the array of bullets
+		// Iterate through the array of bullets
 		for(int n = 0; n < BULLETS; n++)
 		{
-			//is this bullet currently in use?
-			if(bullet[n].isAlive())
+			// Is this bullet currently in use?
+			if(bullet[n].alive())
 			{
-				//draw the bullet
-				g2d.setTransform(identity);
-				g2d.translate(bullet[n].getX(), bullet[n].getY());
-				g2d.setColor(Color.MAGENTA);
-				g2d.draw(bullet[n].getShape());
+				// Draw the bullet
+				bullet[n].transform();
+				bullet[n].draw();
+				if(showBounds)
+				{
+					if(bullet[n].state() == SPRITE_COLLIDED)
+						bullet[n].drawBounds(Color.RED);
+					else
+						bullet[n].drawBounds(Color.BLUE);
+				}
 			}
 		}
 	}
@@ -162,18 +215,22 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 	 */
 	public void drawAsteroids()
 	{
-		//iterate through the asteroids array
+		// Iterate through the asteroids array
 		for(int n = 0; n < ASTEROIDS; n++)
 		{
-			//is this asteoids being used?
-			if(ast[n].isAlive())
+			// Is this asteoids being used?
+			if(ast[n].alive())
 			{
-				//draw the asteroid
-				g2d.setTransform(identity);
-				g2d.translate(ast[n].getX(), ast[n].getY());
-				g2d.rotate(Math.toRadians(ast[n].getMoveAngle()));
-				g2d.setColor(Color.DARK_GRAY);
-				g2d.fill(ast[n].getShape());
+				// Draw the asteroid
+				ast[n].transform();
+				ast[n].draw();
+				if(showBounds)
+				{
+					if(ast[n].state() == SPRITE_COLLIDED)
+						ast[n].drawBounds(Color.RED);
+					else
+						ast[n].drawBounds(Color.BLUE);
+				}
 			}
 		}
 	}
@@ -183,7 +240,7 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 	 */
 	public void paint(Graphics g)
 	{
-		//draw the back buffer onto the applet window
+		// Draw the back buffer onto the applet window
 		g.drawImage(backbuffer, 0, 0, this);
 	}
 	
@@ -192,7 +249,7 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 	 */
 	public void start()
 	{
-		//create the gameloop thread for real-time updates
+		// Create the gameloop thread for real-time updates
 		gameloop = new Thread(this);
 		gameloop.start();
 	}
@@ -202,25 +259,23 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 	 */
 	public void run()
 	{
-		//acquire the current thread
+		// Acquire the current thread
 		Thread t = Thread.currentThread();
 		
-		//keep going as long as the thread is alive
+		// Keep going as long as the thread is alive
 		while(t == gameloop)
 		{
 			try
 			{
-				//update the game loop
-				gameUpdate();
-				
-				//target framerate is 50 fps
+				// Target framerate is 50 fps
 				Thread.sleep(20);
 			}
 			catch(InterruptedException e)
 			{
 				e.printStackTrace();
 			}
-			
+			// Update the game loop
+			gameUpdate();
 			repaint();
 		}
 	}
@@ -230,7 +285,7 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 	 */
 	public void stop()
 	{
-		//kill the gameloop thread
+		// Kill the gameloop thread
 		gameloop = null;
 	}
 	
@@ -239,10 +294,11 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 	 */
 	public void gameUpdate()
 	{
+		checkInput();
 		updateShip();
 		updateBullets();
 		updateAsteroids();
-		checkCollisions();
+		if(collisionTesting) checkCollisions();
 	}
 	
 	/*
@@ -250,23 +306,24 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 	 */
 	public void updateShip()
 	{
-		//update ship's X position
-		ship.incX(ship.getVelX());
+		ship.updatePosition();
+		double newx = ship.position().X();
+		double newy = ship.position().Y();
 		
-		//wrap around left/right
-		if(ship.getX() < -10)
-			ship.setX(getSize().width + 10);
-		else if(ship.getX() > getSize().width + 10)
-			ship.setX(-10);
+		// Wrap around left/right
+		if(ship.position().X() < -10)
+			newx = SCREENWIDTH + 10;
+		else if(ship.position().X() > SCREENWIDTH + 10)
+			newx = -10;
 		
-		//update ship's Y position
-		ship.incY(ship.getVelY());
-		
-		//wrap around top/bottom
-		if(ship.getY() < -10)
-			ship.setY(getSize().height + 10);
-		else if(ship.getY() > getSize().height + 10)
-			ship.setY(-10);
+		// Wrap around top/bottom
+		if(ship.position().Y() < -10)
+			newy = SCREENHEIGHT + 10;
+		else if(ship.position().Y() > SCREENHEIGHT + 10)
+			newy = -10;
+
+		ship.setPosition(new Point2D(newx, newy));
+		ship.setState(SPRITE_NORMAL);
 	}
 	
 	/*
@@ -274,29 +331,31 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 	 */
 	public void updateBullets()
 	{
-		//move each of the bullets
+		// Move each of the bullets
 		for(int n = 0; n < BULLETS; n++)
 		{
-			//is this bullet being used?
-			if(bullet[n].isAlive())
+			// Is this bullet being used?
+			if(bullet[n].alive())
 			{
-				//update bullet's x position
-				bullet[n].incX(bullet[n].getVelX());
+				// Update bullet's x position
+				bullet[n].updatePosition();
 				
-				//bullet disappears at left/right edge
-				if(bullet[n].getX() < 0 || bullet[n].getX() > getSize().width)
+				// Bullet disappears at left/right edge
+				if(bullet[n].position().X() < 0 || bullet[n].position().X() > SCREENWIDTH)
 				{
 					bullet[n].setAlive(false);
 				}
 				
-				//update bullet's y position
-				bullet[n].incY(bullet[n].getVelY());
+				// Update bullet's y position
+				bullet[n].updatePosition();
 				
-				//bullet disappears at top/bottom edge
-				if(bullet[n].getY() < 0 || bullet[n].getY() > getSize().height)
+				// Bullet disappears at top/bottom edge
+				if(bullet[n].position().Y() < 0 || bullet[n].position().Y() > SCREENHEIGHT)
 				{
 					bullet[n].setAlive(false);
 				}
+
+				bullet[n].setState(SPRITE_NORMAL);
 			}
 		}
 	}
@@ -306,38 +365,33 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 	 */
 	public void updateAsteroids()
 	{
-		//move and rotate the asteroids
+		// Move and rotate the asteroids
 		for(int n = 0; n < ASTEROIDS; n++)
 		{
-			//is this asteroid begin used?
-			if(ast[n].isAlive())
+			// Is this asteroid begin used?
+			if(ast[n].alive())
 			{
-				//update the asteroid's X value
-				ast[n].incX(ast[n].getVelX());
+				// Update the asteroid's position and rotation
+				ast[n].updatePosition();
+				ast[n].updateRotation();
+
+				int w = ast[n].imageWidth() - 1;
+				int h = ast[n].imageHeight() - 1;
+				double newx = ast[n].position().X();
+				double newy = ast[n].position().Y();
 				
-				//warp the asteroid at screen edges
-				if(ast[n].getX() < -20)
-					ast[n].setX(getSize().width + 20);
-				else if(ast[n].getX() > getSize().width + 20)
-					ast[n].setX(-20);
-				
-				//update the asteroid's Y value
-				ast[n].incY(ast[n].getVelY());
-				
-				//warp the asteroid at screen edges
-				if(ast[n].getY() < -20)
-					ast[n].setY(getSize().height + 20);
-				else if(ast[n].getY() > getSize().height + 20)
-					ast[n].setY(-20);
-				
-				//update the asteroid's rotation
-				ast[n].incMoveAngle(ast[n].getRotationVelocity());
-				
-				//keep the angle within 0-359 degrees
-				if(ast[n].getMoveAngle() < 0)
-					ast[n].setMoveAngle(360 - ast[n].getRotationVelocity());
-				else if(ast[n].getMoveAngle() > 360)
-					ast[n].setMoveAngle(ast[n].getRotationVelocity());
+				// Wrap the asteroid around the screen edges
+				if(ast[n].position().X() < -w)
+					newx = SCREENWIDTH + w;
+				else if(ast[n].position().X() > SCREENWIDTH + w)
+					newx = -w;
+				if(ast[n].position().Y() < -h)
+					newy = SCREENHEIGHT + h;
+				else if(ast[n].position().Y() > SCREENHEIGHT + h)
+					newy = -h;
+
+				ast[n].setPosition(new Point2D(newx, newy));
+				ast[n].setState(SPRITE_NORMAL);
 			}
 		}
 	}
@@ -347,98 +401,162 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 	 */
 	public void checkCollisions()
 	{
-		//iterate through the asteroids array
+		// Iterate through the asteroids array
 		for(int m = 0; m < ASTEROIDS; m++)
 		{
-			//is this asteroid being used?
-			if(ast[m].isAlive())
+			// Is this asteroid being used?
+			if(ast[m].alive())
 			{
 				/*
-				 * check for coliision with bullet
+				 * Check for colision between asteroids and bullets
 				 */
 				for(int n = 0; n < BULLETS; n++)
 				{
-					//is this bullet being used?
-					if(bullet[n].isAlive())
+					// Is this bullet being used?
+					if(bullet[n].alive())
 					{
-						//perform the collision test
-						if(ast[m].getBounds().contains(bullet[n].getX(), bullet[n].getY()))
+						// Collision?
+						if(ast[m].collidesWith(bullet[n]))
 						{
-							bullet[n].setAlive(false);
-							ast[m].setAlive(false);
-							continue;
+							bullet[n].setState(SPRITE_COLLIDED);
+							ast[m].setState(SPRITE_COLLIDED);
+							explode.play();
 						}
 					}
 				}
-				
-				/*
-				 * check for collision with ship
-				 */
-				if(ast[m].getBounds().intersects(ship.getBounds()))
+			}
+		}
+
+		/*
+		 * Check for collision asteroids and ship
+		 */
+		for(int m = 0; m < ASTEROIDS; m++)
+		{
+			if(ast[m].alive())
+			{
+				if(ship.collidesWith(ast[m]))
 				{
-					ast[m].setAlive(false);
-					ship.setX(320);
-					ship.setY(240);
-					ship.setFaceAngle(0);
-					ship.setVelX(0);
-					ship.setVelY(0);
-					continue;
+					ast[m].setState(SPRITE_COLLIDED);
+					ship.setState(SPRITE_COLLIDED);
+					explode.play();
 				}
 			}
+		}
+	}
+
+	/*
+	 * Process keys that have been pressed
+	 */
+	public void checkInput()
+	{
+		if(keyLeft)
+		{
+			// Left arrow rotates ship left 5 degrees
+			ship.setFaceAngle(ship.faceAngle() - 5);
+			if(ship.faceAngle() < 0) ship.setFaceAngle(360 - 5);
+		}
+		else if(keyRight)
+		{
+			// Right arrow rotates ship right 5 degrees
+			ship.setFaceAngle(ship.faceAngle() + 5);
+			if(ship.faceAngle() > 360) ship.setFaceAngle(5);
+		}
+
+		if(keyUp)
+		{
+			// Up arrow applies thrust to ship
+			applyThrust();
 		}
 	}
 	
 	/*
 	 * Key listener events
 	 */
-	public void keyReleased(KeyEvent k) { }
 	public void keyTyped(KeyEvent k) { }
 	public void keyPressed(KeyEvent k)
 	{
-		int keyCode = k.getKeyCode();
-		
-		switch(keyCode)
+		switch(k.getKeyCode())
 		{
-		case KeyEvent.VK_LEFT:
-			//left arrow rotates ship left 5 degrees
-			ship.incFaceAngle(-10);
-			if(ship.getFaceAngle() < 0) ship.setFaceAngle(360 - 10);
-			break;
-		case KeyEvent.VK_RIGHT:
-			//right arrow rotates ship right 5 degrees
-			ship.incFaceAngle(10);
-			if(ship.getFaceAngle() > 360) ship.setFaceAngle(10);
-			break;
-		case KeyEvent.VK_UP:
-			//up arrow adds thrust to ship (1/10 normal speed)
-			ship.setMoveAngle(ship.getFaceAngle() - 90);
-			ship.incVelX(calcAngleMoveX(ship.getMoveAngle()) * 0.1);
-			ship.incVelY(calcAngleMoveY(ship.getMoveAngle()) * 0.1);
-			break;
-		case KeyEvent.VK_CONTROL:
-		case KeyEvent.VK_ENTER:
-		case KeyEvent.VK_SPACE:
-			//fire a bullet
-			currentBullet++;
-			if(currentBullet > BULLETS - 1) currentBullet = 0;
-			bullet[currentBullet].setAlive(true);
-			
-			//point bullet in same direction ship is facing
-			bullet[currentBullet].setX(ship.getX());
-			bullet[currentBullet].setY(ship.getY());
-			bullet[currentBullet].setMoveAngle(ship.getFaceAngle() - 90);
-			
-			//fire bullet at angle of the ship
-			double angle = bullet[currentBullet].getMoveAngle();
-			double svx = ship.getVelX();
-			double svy = ship.getVelY();
-			bullet[currentBullet].setVelX(svx + calcAngleMoveX(angle) * 2);
-			bullet[currentBullet].setVelY(svy + calcAngleMoveY(angle) * 2);
-
-            // Play shoot sound
-            shoot.play();
-			break;
+			case KeyEvent.VK_LEFT:
+				keyLeft = true;
+				break;
+			case KeyEvent.VK_RIGHT:
+				keyRight = true;
+				break;
+			case KeyEvent.VK_UP:
+				keyUp = true;
+				break;
+			case KeyEvent.VK_CONTROL:
+				keyFire = true;
+			case KeyEvent.VK_B:
+				// Toogle bounding rectangles
+				showBounds = !showBounds;
+				break;
+			case KeyEvent.VK_C:
+				// Toggle collision testing
+				collisionTesting = !collisionTesting;
+				break;
 		}
+	}
+
+	public void keyReleased(KeyEvent k) 
+	{ 
+		switch(k.getKeyCode())
+		{
+			case KeyEvent.VK_LEFT:
+				keyLeft = false;
+				break;
+			case KeyEvent.VK_RIGHT:
+				keyRight = false;
+				break;
+			case KeyEvent.VK_UP:
+				keyUp = false;
+				break;
+			case KeyEvent.VK_CONTROL:
+				keyFire = false;
+				fireBullet();
+		}
+	}
+
+	public void applyThrust()
+	{
+		// Up arrow adds thrust to ship (1/10 normal speed)
+		ship.setMoveAngle(ship.faceAngle() - 90);
+
+		// Calculate the X and Y velocity based on angle
+		double velx = ship.velocity().X();
+		velx += calcAngleMoveX(ship.moveAngle()) * ACCELERATION;
+		double vely = ship.velocity().Y();
+		vely += calcAngleMoveY(ship.moveAngle()) * ACCELERATION;
+		ship.setVelocity(new Point2D(velx, vely));
+	}
+
+	public void fireBullet()
+	{
+		// Fire a bullet
+		currentBullet++;
+		if(currentBullet > BULLETS - 1) currentBullet = 0;
+		bullet[currentBullet].setAlive(true);
+
+		// Set bullet's starting point
+		int w = bullet[currentBullet].imageWidth();
+		int h = bullet[currentBullet].imageHeight();
+		double x = ship.center().X() - w/2;
+		double y = ship.center().Y() - h/2;
+		bullet[currentBullet].setPosition(new Point2D(x, y));
+
+		// Point bullet in same direction ship is facing
+		bullet[currentBullet].setFaceAngle(ship.faceAngle());
+		bullet[currentBullet].setMoveAngle(ship.faceAngle() - 90);
+
+		// Fire bullet at angle of the ship
+		double angle = bullet[currentBullet].moveAngle();
+		double svx = calcAngleMoveX(angle) * BULLET_SPEED;
+		double svy = calcAngleMoveY(angle) * BULLET_SPEED;
+		bullet[currentBullet].setVelocity(new Point2D(svx, svy));
+		
+		// Play shoot sound
+		shoot.play();
 	}
 	
 	/*
@@ -446,7 +564,8 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 	 */
 	public double calcAngleMoveX(double angle)
 	{
-		return (double) (Math.cos(angle * Math.PI / 180));
+		double movex = Math.cos(angle * Math.PI / 180);
+		return movex;
 	}
 	
 	/*
@@ -454,6 +573,7 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 	 */
 	public double calcAngleMoveY(double angle)
 	{
-		return (double) (Math.sin(angle * Math.PI / 180));
+		double movey = Math.sin(angle * Math.PI / 180);
+		return movey;
 	}
 }
