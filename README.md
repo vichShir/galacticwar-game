@@ -62,7 +62,7 @@ O livro foi publicado em 2010 e utiliza **Java Applets** como forma de processam
 - Galactic War Game Project
 
 ### 🌐 Motivação/História
-O livro _**Programação de Games com Java** - 2º Edição de **Jotathan S. Harbour**_ foi o **meu primeiro livro de programação**, dado por meu **pai em quando tinha 11 anos de idade**. Desde a minha pré-adolescência ele me **motivou a programar** e meu deu este livro de presente como ponto de partida.
+O livro _**Programação de Games com Java** - 2º Edição de **Jotathan S. Harbour**_ foi o **meu primeiro livro de programação**, dado por meu **pai quando tinha 11 anos de idade**. Desde a minha pré-adolescência ele me **motivou a programar** e meu deu este livro de presente como ponto de partida.
 
 Li diversas vezes este livro em viagens, sempre **achando** que sabia o domínio total de programação. Apenas não tinha **experimentado colocar tudo em prática e descobrir minhas fraquezas**.
 
