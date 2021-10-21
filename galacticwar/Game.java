@@ -33,6 +33,15 @@ abstract class Game extends Applet implements Runnable, KeyListener, MouseListen
     private int desiredRate;
 	private long startTime = System.currentTimeMillis();
 
+    // Local applet object
+    public Applet applet() { return this; }
+
+    // Game pause state
+    private boolean _gamePaused = false;
+    public boolean gamePaused() { return _gamePaused; }
+    public void pauseGame() { _gamePaused = true; }
+    public void resumeGame() { _gamePaused = false; }
+
     // Declare the game event methods that sub-class must implement
     abstract void gameStartup();
     abstract void gameTimedUpdate();
@@ -110,7 +119,10 @@ abstract class Game extends Applet implements Runnable, KeyListener, MouseListen
         gameRefreshScreen();
 
         // Draw the internal list of sprites
-        drawSprites();
+        if (!gamePaused()) 
+        {
+            drawSprites();
+        }
 
         // Redraw the screen
         paint(g);
@@ -155,8 +167,11 @@ abstract class Game extends Applet implements Runnable, KeyListener, MouseListen
 			}
 
             // Update the internal list of sprites
-            updateSprites();
-            testCollisions();
+            if (!gamePaused()) 
+            {
+                updateSprites();
+                testCollisions();
+            }
 
 			// Allow main game to update if needed
 			gameTimedUpdate();
