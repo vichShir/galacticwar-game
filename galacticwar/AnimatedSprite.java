@@ -4,14 +4,12 @@
 
 import java.awt.*;
 import java.awt.image.*;
-import java.net.URL;
 import java.applet.*;
-import java.util.*;
 
 public class AnimatedSprite extends Sprite
 {
     // This image holds the large tiled bitmap
-    private Image animimage;
+    private ImageEntity animimage;
     // Temp iage passed to parent draw method
     BufferedImage tempImage;
     Graphics2D tempSurface;
@@ -25,6 +23,7 @@ public class AnimatedSprite extends Sprite
     public AnimatedSprite(Applet applet, Graphics2D g2d)
     {
         super(applet, g2d);
+        animimage = new ImageEntity(applet);
         currFrame = 0;
         totFrames = 0;
         animDir = 1;
@@ -35,22 +34,10 @@ public class AnimatedSprite extends Sprite
         cols = 0;
     }
 
-    private URL getURL(String filename)
-    {
-        URL url = null;
-        try
-        {
-            url = this.getClass().getResource(filename);
-        }
-        catch(Exception e) { }
-        return url;
-    }
-
     public void load(String filename, int columns, int rows, int width, int height)
     {
         // Load the tiled animation bitmap
-        Toolkit tk = Toolkit.getDefaultToolkit();
-        animimage = tk.getImage(getURL(filename));
+        animimage.load(filename);
         setColumns(columns);
         setTotalFrames(columns * rows);
         setFrameWidth(width);
@@ -77,48 +64,59 @@ public class AnimatedSprite extends Sprite
     public int animationDirection() {return animDir; }
     public void setAnimationDirection(int dir) { animDir = dir; }
 
-    public int frameCount() { return frCount; }
-    public void setFrameCount(int count) { frCount = count; }
-
     public int frameDelay() { return frDelay; }
     public void setFrameDelay(int delay) { frDelay = delay; }
 
     public int columns() { return cols; }
     public void setColumns(int num) { cols = num; }
 
+    public Image getAnimImage() { return animimage.getImage(); }
+    public void setAnimImage(Image image) { animimage.setImage(image); }
+
     public void updateAnimation()
     {
-        frCount++;
-        if(frameCount() > frameDelay())
+        frCount += 1;
+        if (frCount > frDelay) 
         {
-            setFrameCount(0);
+            frCount = 0;
             // Update the animation frame
-            setCurrentFrame(currentFrame() + animationDirection());
-            if(currentFrame() > totalFrames() - 1)
+            currFrame += animDir;
+            if (currFrame > totFrames - 1) 
             {
-                setCurrentFrame(0);
+                currFrame = 0;
             }
-            else if(currentFrame() < 0)
+            else if (currFrame < 0) 
             {
-                setCurrentFrame(totalFrames() - 1);
+                currFrame = totFrames - 1;
             }
         }
     }
 
-    public void draw()
+    public void updateFrame()
     {
-        // Calculate the current frame's X and Y position
-        int frameX = (currentFrame() % columns()) * frameWidth();
-        int frameY = (currentFrame() / columns()) * frameHeight();
+        if(totFrames > 0)
+        {
+            // Calculate the current frame's X and Y position
+            int frameX = (currentFrame() % columns()) * frameWidth();
+            int frameY = (currentFrame() / columns()) * frameHeight();
 
-        // Copy the frame onto the temp image
-        tempSurface.drawImage(animimage, 0, 0, frameWidth() - 1, 
-            frameHeight() - 1, frameX, frameY, frameX + frameWidth(), 
-            frameY + frameHeight(), applet());
-        
-        // Pass the temp image on to the parent class and draw it
-        super.setImage(tempImage);
-        super.transform();
-        super.draw();
+            if(tempImage == null)
+            {
+                tempImage = new BufferedImage(frameWidth(), frameHeight(), BufferedImage.TYPE_INT_ARGB);
+                tempSurface = tempImage.createGraphics();
+            }
+
+            // Copy the frame onto the temp image
+            if (animimage.getImage() != null) 
+            {
+                tempSurface.drawImage(animimage.getImage(), 0, 0, frameWidth() - 1,
+                frameHeight() - 1, frameX, frameY,
+                frameX + frameWidth(),
+                frameY + frameHeight(), applet());
+            }
+            
+            // Pass the temp image on to the parent class and draw it
+            super.setImage(tempImage);
+        }
     }
 }

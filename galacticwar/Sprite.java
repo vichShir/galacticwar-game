@@ -12,6 +12,9 @@ public class Sprite
     protected Point2D vel;
     protected double rotRate;
     protected int currentState;
+    protected int sprType;
+    protected boolean _collided;
+    protected int _lifespan, _lifeage;
 
     // Constructor
     Sprite(Applet a, Graphics2D g2d)
@@ -23,6 +26,9 @@ public class Sprite
         vel = new Point2D(0, 0);
         rotRate = 0.0;
         currentState = 0;
+        _collided = false;
+        _lifespan = 0;
+        _lifeage = 0;
     }
 
     // Load bitmap file
@@ -60,14 +66,14 @@ public class Sprite
     }
 
     // Methods related to automatic rotation factor
-    public double rotationRAte() { return rotRate; }
+    public double rotationRate() { return rotRate; }
     public void setRotationRate(double rate) { rotRate = rate; }
     public void updateRotation()
     {
         setFaceAngle(faceAngle() + rotRate);
         if(faceAngle() < 0)
             setFaceAngle(360 - rotRate);
-        else   
+        else if (faceAngle() > 360)
             setFaceAngle(rotRate);
     }
 
@@ -86,7 +92,7 @@ public class Sprite
     public Point2D velocity() { return vel; }
     public void setVelocity(Point2D vel) { this.vel = vel; }
 
-    // Returnds the center of the sprite as a Point2D
+    // Returns the center of the sprite as a Point2D
     public Point2D center()
     {
         return(new Point2D(entity.getCenterX(), entity.getCenterY()));
@@ -133,5 +139,29 @@ public class Sprite
     public Applet applet() { return entity.applet; }
     public Graphics2D graphics() { return entity.g2d; }
     public Image image() { return entity.image; }
-    public void setImage(Image image) { entity.setImage(image); } 
+    public void setImage(Image image) { entity.setImage(image); }
+
+    public int spriteType() { return sprType; }
+    public void setSpriteType(int type) { sprType = type; }
+
+    public boolean collided() { return _collided; }
+    public void setCollided(boolean collide) { _collided = collide; }
+
+    public int lifespan() { return _lifespan; }
+    public void setLifespan(int life) { _lifespan = life; }
+    public int lifeage() { return _lifeage; }
+    public void setLifeage(int age) { _lifeage = age; }
+    public void updateLifetime() 
+    {
+        // If lifespan is used, it must be > 0
+        if (_lifespan > 0) 
+        {
+            _lifeage++;
+            if (_lifeage > _lifespan) 
+            {
+                setAlive(false);
+                _lifeage = 0;
+            }
+        }
+    }
 }

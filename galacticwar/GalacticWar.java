@@ -1,574 +1,316 @@
 /*******************************************************
- * GALACTIC WAR, Capitulo 13
+ * GALACTIC WAR, Capitulo 14
  *******************************************************/
 
-import java.applet.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.awt.geom.*;
-import java.awt.image.*;
 import java.util.*;
+import java.lang.System;
 
 /*******************************************************
  * Primary class for the game
  *******************************************************/
-public class GalacticWar extends Applet implements Runnable, KeyListener
+public class GalacticWar extends Game
 {
     private static final long serialVersionUID = 1L;
 
-	// Global constants
-	static int SCREENWIDTH = 800;
-	static int SCREENHEIGHT = 600;
-	static int CENTERX = SCREENWIDTH / 2;
-	static int CENTERY = SCREENHEIGHT / 2;
-	static int ASTEROIDS = 10;
-	static int BULLETS = 10;
-	static int BULLET_SPEED = 4;
-	static double ACCELERATION = 0.05;
+	// These must be static because they are passed to a constructor
+	static int FRAMERATE = 60;
+    static int SCREENWIDTH = 800;
+    static int SCREENHEIGHT = 600;
+	
+	// Misc global constants
+	final int ASTEROIDS = 10;
+    final int BULLET_SPEED = 4;
+    final double ACCELERATION = 0.05;
+    final double SHIPROTATION = 5.0;
 	
 	// Sprite state values
-	static int STATE_NORMAL = 0;
-	static int STATE_COLLIDED = 1;
-	static int STATE_EXPLODING = 2;
+	final int STATE_NORMAL = 0;
+    final int STATE_COLLIDED = 1;
+    final int STATE_EXPLODING = 2;
 
-	// The main thread becomes the game loop
-	Thread gameloop;
-	
-	// Double buffer objects
-	BufferedImage backbuffer;
-	Graphics2D g2d;
+	// Sprite types
+	final int SPRITE_SHIP = 1;
+    final int SPRITE_ASTEROID_BIG = 10;
+    final int SPRITE_ASTEROID_MEDIUM = 11;
+    final int SPRITE_ASTEROID_SMALL = 12;
+    final int SPRITE_ASTEROID_TINY = 13;
+    final int SPRITE_BULLET = 100;
+    final int SPRITE_EXPLOSION = 200;
 	
 	// Various toggles
-	boolean showBounds = true;
+	boolean showBounds = false;
 	boolean collisionTesting = true;
-	long collisionTimer = 0;
 
-	// Define the game objects
+	// Define the images used in the game
 	ImageEntity background;
-	Sprite ship;
-	Sprite[] ast = new Sprite[ASTEROIDS];
-	Sprite[] bullet = new Sprite[BULLETS];
-	int currentBullet = 0;
-	AnimatedSprite explosion;
+	ImageEntity bulletImage;
+	ImageEntity[] bigAsteroids = new ImageEntity[5];
+	ImageEntity[] medAsteroids = new ImageEntity[2];
+	ImageEntity[] smlAsteroids = new ImageEntity[3];
+	ImageEntity[] tnyAsteroids = new ImageEntity[4];
+	ImageEntity[] explosions = new ImageEntity[2];
+	ImageEntity[] shipImage = new ImageEntity[2];
 	
 	// Create a random number generator
 	Random rand = new Random();
 
-	// Define the sound effects objects
-	SoundClip shoot;
-    SoundClip explode;
+	// Used to make ship temporarily invulnerable
+	long collisionTimer = 0;
     
-	// Simple way to handle multiple keypress
-	boolean keyDown, keyUp, keyLeft, keyRight, keyFire;
+	// Some key input tracking variables
+	boolean keyLeft, keyRight, keyUp, keyFire, keyB, keyC;
 
-	// Frame rate counter
-	int frameCount = 0, frameRate = 0;
-	long startTime = System.currentTimeMillis();
-	
-	/*
-	 * Applet init event
-	 */
-	public void init()
+	/*******************************************************
+     * Constructor
+     ******************************************************/
+	public GalacticWar()
 	{
-		// Create the back buffer for smooth graphics
-		backbuffer = new BufferedImage(640, 480, BufferedImage.TYPE_INT_RGB);
-		g2d = backbuffer.createGraphics();
+		// Call base Game class' constructor
+		super(FRAMERATE, SCREENWIDTH, SCREENHEIGHT);
+	}
 
+	/*******************************************************
+     * gameStartup event passed by game engine
+     ******************************************************/
+	void gameStartup()
+	{
 		// Load the background image
 		background = new ImageEntity(this);
 		background.load("media/images/bluespace.png");
-		
-		// Set up the ship
-		ship = new Sprite(this, g2d);
-        ship.load("media/images/spaceship.png");
-        ship.setPosition(new Point2D(CENTERX, CENTERY));
+
+		// Create the ship sprite-first in the sprite list
+		shipImage[0] = new ImageEntity(this);
+		shipImage[0].load("media/images/spaceship.png");
+		shipImage[1] = new ImageEntity(this);
+		shipImage[1].load("media/images/ship_thrust.png");
+
+		AnimatedSprite ship = new AnimatedSprite(this, graphics());
+		ship.setSpriteType(SPRITE_SHIP);
+		ship.setImage(shipImage[0].getImage());
+		ship.setFrameWidth(ship.imageWidth());
+		ship.setFrameHeight(ship.imageHeight());
+		ship.setPosition(new Point2D(SCREENWIDTH/2, SCREENHEIGHT/2));
 		ship.setAlive(true);
-		
-		// Set up the bullets
-		for(int n = 0; n < BULLETS; n++)
+		ship.setState(STATE_NORMAL);
+		sprites().add(ship);
+
+		// Load the bullet sprite image
+		bulletImage = new ImageEntity(this);
+		bulletImage.load("media/images/plasmashot.png");
+
+		// Load the explosion sprite image
+		explosions[0] = new ImageEntity(this);
+		explosions[0].load("media/images/explosion.png");
+		explosions[1] = new ImageEntity(this);
+		explosions[1].load("media/images/explosion2.png");
+
+		// Load the big asteroid images (5 total)
+		for(int n = 0; n < 5; n++)
 		{
-			bullet[n] = new Sprite(this, g2d);
-			bullet[n].load("media/images/plasmashot.png");
+			bigAsteroids[n] = new ImageEntity(this);
+			String fn = "media/images/asteroid" + (n+1) + ".png";
+			bigAsteroids[n].load(fn);
 		}
-		
-		// Set up the asteroids
+
+		// Load the medium asteroid images (2 total)
+		for(int n = 0; n < 2; n++)
+		{
+			medAsteroids[n] = new ImageEntity(this);
+			String fn = "media/images/medium" + (n+1) + ".png";
+			medAsteroids[n].load(fn);
+		}
+
+		// Load the small asteroid images (3 total)
+		for(int n = 0; n < 3; n++)
+		{
+			smlAsteroids[n] = new ImageEntity(this);
+			String fn = "media/images/small" + (n+1) + ".png";
+			smlAsteroids[n].load(fn);
+		}
+
+		// Load the tiny asteroid images (4 total)
+		for(int n = 0; n < 4; n++)
+		{
+			tnyAsteroids[n] = new ImageEntity(this);
+			String fn = "media/images/tiny" + (n+1) + ".png";
+			tnyAsteroids[n].load(fn);
+		}
+
+		// Create the random asteroid sprites
 		for(int n = 0; n < ASTEROIDS; n++)
 		{
-			ast[n] = new Sprite(this, g2d);
-			ast[n].setAlive(true);
-			// Load the asteroid image
-			int i = rand.nextInt(5) + 1;
-			ast[n].load("media/images/asteroid" + i + ".png");
-			// Set to a random position on the screen
-			int x = rand.nextInt(SCREENWIDTH);
-			int y = rand.nextInt(SCREENHEIGHT);
-			ast[n].setPosition(new Point2D(x, y));
-			// Set rotation angles to a random value
-			ast[n].setFaceAngle(rand.nextInt(360));
-			ast[n].setMoveAngle(rand.nextInt(360));
-			ast[n].setRotationRate(rand.nextDouble());
-			// Set velocity based on movement direction
-			double ang = ast[n].moveAngle() - 90;
-			double velx = calcAngleMoveX(ang);
-			double vely = calcAngleMoveY(ang);
-			ast[n].setVelocity(new Point2D(velx, vely));
+			createAsteroid();
 		}
-
-        // Load sound files
-        shoot = new SoundClip("media/sounds/shoot.wav");
-        explode = new SoundClip("media/sounds/explode.wav");
-
-		// Load the explosion
-		explosion = new AnimatedSprite(this, g2d);
-		explosion.load("media/images/explosion.png", 4, 4, 96, 96);
-		explosion.setFrameDelay(2);
-		explosion.setAlive(false);
-		
-		// Start the user input listener
-		addKeyListener(this);
 	}
-	
-	/*
-	 * Applet update event to redraw the screen
-	 */
-	public void update(Graphics g)
+
+	/*******************************************************
+     * gameTimedUpdate event passed by game engine
+     ******************************************************/
+	void gameTimedUpdate()
 	{
-		// Calculate frame rate
-		frameCount++;
-		if(System.currentTimeMillis() > startTime + 1000)
-		{
-			startTime = System.currentTimeMillis();
-			frameRate = frameCount;
-			frameCount = 0;
-		}
+		checkInput();
+	}
 
+	/*******************************************************
+     * gameRefreshScreen event passed by game engine
+     ******************************************************/
+	void gameRefreshScreen()
+	{
+		Graphics2D g2d = graphics();
+
+		// The ship is always the first sprite in the linked list
+		AnimatedSprite ship = (AnimatedSprite) sprites().get(0);
+		
 		// Draw the background
-		g2d.drawImage(background.getImage(), 0, 0, SCREENWIDTH - 1, SCREENHEIGHT - 1, this);
-
-		// Draw the games graphics drawAsteroids();
-		drawShip();
-		drawBullets();
-		drawExplosions();
-		drawAsteroids();
+		g2d.drawImage(background.getImage(), 0, 0, SCREENWIDTH-1, SCREENHEIGHT-1, this);
 
 		// Print status information on the screen
 		g2d.setColor(Color.WHITE);
-		g2d.drawString("FPS: " + frameRate, 5, 10);
-		long x = Math.round(ship.position().X());
-		long y = Math.round(ship.position().Y());
-		g2d.drawString("Ship: " + x + "," + y, 5, 25);
-		g2d.drawString("Move angle: " + Math.round(ship.moveAngle()) + 90, 5, 40);
-		g2d.drawString("Face angle: " + Math.round(ship.faceAngle()), 5, 55);
-
-		if(ship.state() == STATE_NORMAL)
-			g2d.drawString("State: NORMAL", 5, 70);
-		else if(ship.state() == STATE_COLLIDED)
-			g2d.drawString("State: COLLIDED", 5, 70);
-		else if(ship.state() == STATE_EXPLODING)
-			g2d.drawString("State: EXPLODING", 5, 70);
+        g2d.drawString("FPS: " + frameRate(), 5, 10);
+        long x = Math.round(ship.position().X());
+        long y = Math.round(ship.position().Y());
+        g2d.drawString("Ship: " + x + "," + y , 5, 25);
+        g2d.drawString("Move angle: " + Math.round(ship.moveAngle())+90, 5, 40);
+        g2d.drawString("Face angle: " +  Math.round(ship.faceAngle()), 5, 55);
+        if (ship.state()==STATE_NORMAL)
+            g2d.drawString("State: NORMAL", 5, 70);
+        else if (ship.state()==STATE_COLLIDED)
+            g2d.drawString("State: COLLIDED", 5, 70);
+        else if (ship.state()==STATE_EXPLODING)
+            g2d.drawString("State: EXPLODING", 5, 70);
+        g2d.drawString("Sprites: " + sprites().size(), 5, 120);
 
 		if(showBounds)
 		{
 			g2d.setColor(Color.GREEN);
 			g2d.drawString("BOUNDING BOXES", SCREENWIDTH-150, 10);
 		}
-
 		if(collisionTesting)
 		{
 			g2d.setColor(Color.GREEN);
 			g2d.drawString("COLLISION TESTING", SCREENWIDTH-150, 25);
 		}
-		
-		// Repaint the applet window
-		paint(g);
 	}
-	
-	/*
-	 * DrawShip called by applet update event
-	 */
-	public void drawShip()
-	{
-        // Set the transform for the image
-        ship.transform();
-        ship.draw();
 
-        // Draw bounding rectangle around ship
-        if(showBounds)
-        {
-            if(ship.state() == STATE_COLLIDED)
-				ship.drawBounds(Color.RED);
-			else
-				ship.drawBounds(Color.BLUE);
+	/*******************************************************
+     * gameShutdown event passed by game engine
+     ******************************************************/
+	void gameShutdown()
+	{
+		// Oh well, let the garbage collector have at it..
+	}
+
+	/*******************************************************
+     * spriteUpdate event passed by game engine
+     ******************************************************/
+	public void spriteUpdate(AnimatedSprite sprite)
+	{
+		switch(sprite.spriteType())
+		{
+			case SPRITE_SHIP:
+				warp(sprite);
+				break;
+			case SPRITE_BULLET:
+				warp(sprite);
+				break;
+			case SPRITE_EXPLOSION:
+				if (sprite.currentFrame() == sprite.totalFrames()-1) 
+				{
+					sprite.setAlive(false);
+				}
+				break;
+			case SPRITE_ASTEROID_BIG:
+			case SPRITE_ASTEROID_MEDIUM:
+			case SPRITE_ASTEROID_SMALL:
+			case SPRITE_ASTEROID_TINY:
+				warp(sprite);
+				break;
+		}
+	}
+
+	/*****************************************************
+     * spriteDraw event passed by game engine
+     * called by the game class after each sprite is drawn
+     * to give you a chance to manipulate the sprite
+     *****************************************************/
+    public void spriteDraw(AnimatedSprite sprite) 
+	{
+        if (showBounds) 
+		{
+            if (sprite.collided())
+                sprite.drawBounds(Color.RED);
+            else
+                sprite.drawBounds(Color.BLUE);
         }
-	}
-	
-	/*
-	 * DrawBullets called by applet update event
-	 */
-	public void drawBullets()
+    }
+
+    /*****************************************************
+     * spriteDying event passed by game engine
+     * called after a sprite's age reaches its lifespan
+     * at which point it will be killed off, and then removed from
+     * the linked list. you can cancel the purging process here.
+     *****************************************************/
+    public void spriteDying(AnimatedSprite sprite) 
 	{
-		// Iterate through the array of bullets
-		for(int n = 0; n < BULLETS; n++)
+
+    }
+
+    /*****************************************************
+     * spriteCollision event passed by game engine
+     *****************************************************/
+    public void spriteCollision(AnimatedSprite spr1, AnimatedSprite spr2) 
+	{
+        // Jump out quickly if collisions are off
+        if (!collisionTesting) return;
+
+        // Figure out what type of sprite has collided
+        switch(spr1.spriteType()) 
 		{
-			// Is this bullet currently in use?
-			if(bullet[n].alive())
-			{
-				// Draw the bullet
-				bullet[n].transform();
-				bullet[n].draw();
-				if(showBounds)
+        	case SPRITE_BULLET:
+				// Did bullet hit an asteroid?
+				if (isAsteroid(spr2.spriteType())) 
 				{
-					if(bullet[n].state() == STATE_COLLIDED)
-						bullet[n].drawBounds(Color.RED);
-					else
-						bullet[n].drawBounds(Color.BLUE);
+					spr1.setAlive(false);
+					spr2.setAlive(false);
+					breakAsteroid(spr2);
 				}
-			}
-		}
-	}
-	
-	/*
-	 * DrawAsteroids called by applet update event
-	 */
-	public void drawAsteroids()
-	{
-		// Iterate through the asteroids array
-		for(int n = 0; n < ASTEROIDS; n++)
-		{
-			// Is this asteoids being used?
-			if(ast[n].alive())
-			{
-				// Draw the asteroid
-				ast[n].transform();
-				ast[n].draw();
-				if(showBounds)
+				break;
+        	case SPRITE_SHIP:
+				// Did asteroid crash into the ship?
+				if (isAsteroid(spr2.spriteType())) 
 				{
-					if(ast[n].state() == STATE_COLLIDED)
-						ast[n].drawBounds(Color.RED);
-					else
-						ast[n].drawBounds(Color.BLUE);
-				}
-			}
-		}
-	}
-
-	public void drawExplosions()
-	{
-		// Explosions don't need separate update method
-		if(explosion.alive())
-		{
-			explosion.updateAnimation();
-			if(explosion.currentFrame() == explosion.totalFrames() - 1)
-			{
-				explosion.setCurrentFrame(0);
-				explosion.setAlive(false);
-			}
-			else
-			{
-				explosion.draw();
-			}
-		}
-	}
-	
-	/*
-	 * Applet window repaint event - draw the back buffer
-	 */
-	public void paint(Graphics g)
-	{
-		// Draw the back buffer onto the applet window
-		g.drawImage(backbuffer, 0, 0, this);
-	}
-	
-	/*
-	 * Thread start event - start the game loop running
-	 */
-	public void start()
-	{
-		// Create the gameloop thread for real-time updates
-		gameloop = new Thread(this);
-		gameloop.start();
-	}
-	
-	/*
-	 * Thread run event (game loop)
-	 */
-	public void run()
-	{
-		// Acquire the current thread
-		Thread t = Thread.currentThread();
-		
-		// Keep going as long as the thread is alive
-		while(t == gameloop)
-		{
-			try
-			{
-				// Target framerate is 50 fps
-				Thread.sleep(20);
-			}
-			catch(InterruptedException e)
-			{
-				e.printStackTrace();
-			}
-			// Update the game loop
-			gameUpdate();
-			repaint();
-		}
-	}
-	
-	/*
-	 * Thread stop event
-	 */
-	public void stop()
-	{
-		// Kill the gameloop thread
-		gameloop = null;
-	}
-	
-	/*
-	 * Move and animate the objects in the game
-	 */
-	public void gameUpdate()
-	{
-		checkInput();
-		updateShip();
-		updateBullets();
-		updateAsteroids();
-		if(collisionTesting)
-		{
-			checkCollisions();
-			handleShipCollisions();
-			handleBulletCollisions();
-			handleAsteroidCollisions();
-		}
-	}
-	
-	/*
-	 * Update the ship position based on velocity
-	 */
-	public void updateShip()
-	{
-		ship.updatePosition();
-		double newx = ship.position().X();
-		double newy = ship.position().Y();
-		
-		// Wrap around left/right
-		if(ship.position().X() < -10)
-			newx = SCREENWIDTH + 10;
-		else if(ship.position().X() > SCREENWIDTH + 10)
-			newx = -10;
-		
-		// Wrap around top/bottom
-		if(ship.position().Y() < -10)
-			newy = SCREENHEIGHT + 10;
-		else if(ship.position().Y() > SCREENHEIGHT + 10)
-			newy = -10;
-
-		ship.setPosition(new Point2D(newx, newy));
-		ship.setState(STATE_NORMAL);
-	}
-	
-	/*
-	 * Update the bullets based on velocity
-	 */
-	public void updateBullets()
-	{
-		// Move each of the bullets
-		for(int n = 0; n < BULLETS; n++)
-		{
-			// Is this bullet being used?
-			if(bullet[n].alive())
-			{
-				// Update bullet's x position
-				bullet[n].updatePosition();
-				
-				// Bullet disappears at left/right edge
-				if(bullet[n].position().X() < 0 || bullet[n].position().X() > SCREENWIDTH)
-				{
-					bullet[n].setAlive(false);
-				}
-				
-				// Update bullet's y position
-				bullet[n].updatePosition();
-				
-				// Bullet disappears at top/bottom edge
-				if(bullet[n].position().Y() < 0 || bullet[n].position().Y() > SCREENHEIGHT)
-				{
-					bullet[n].setAlive(false);
-				}
-
-				bullet[n].setState(STATE_NORMAL);
-			}
-		}
-	}
-	
-	/*
-	 * Update the asteroids based on velocity
-	 */
-	public void updateAsteroids()
-	{
-		// Move and rotate the asteroids
-		for(int n = 0; n < ASTEROIDS; n++)
-		{
-			// Is this asteroid begin used?
-			if(ast[n].alive())
-			{
-				// Update the asteroid's position and rotation
-				ast[n].updatePosition();
-				ast[n].updateRotation();
-
-				int w = ast[n].imageWidth() - 1;
-				int h = ast[n].imageHeight() - 1;
-				double newx = ast[n].position().X();
-				double newy = ast[n].position().Y();
-				
-				// Wrap the asteroid around the screen edges
-				if(ast[n].position().X() < -w)
-					newx = SCREENWIDTH + w;
-				else if(ast[n].position().X() > SCREENWIDTH + w)
-					newx = -w;
-				if(ast[n].position().Y() < -h)
-					newy = SCREENHEIGHT + h;
-				else if(ast[n].position().Y() > SCREENHEIGHT + h)
-					newy = -h;
-
-				ast[n].setPosition(new Point2D(newx, newy));
-				ast[n].setState(STATE_NORMAL);
-			}
-		}
-	}
-	
-	/*
-	 * Test asteroids for collisions with ship or bullets
-	 */
-	public void checkCollisions()
-	{
-		// Iterate through the asteroids array
-		for(int m = 0; m < ASTEROIDS; m++)
-		{
-			// Is this asteroid being used?
-			if(ast[m].alive())
-			{
-				/*
-				 * Check for colision between asteroids and bullets
-				 */
-				for(int n = 0; n < BULLETS; n++)
-				{
-					// Is this bullet being used?
-					if(bullet[n].alive())
+					if (spr1.state() == STATE_NORMAL)
 					{
-						// Collision?
-						if(ast[m].collidesWith(bullet[n]))
+						collisionTimer = System.currentTimeMillis();
+						spr1.setVelocity(new Point2D(0, 0));
+						double x = spr1.position().X() - 10;
+						double y = spr1.position().Y() - 10;
+						startBigExplosion(new Point2D(x, y));
+						spr1.setState(STATE_EXPLODING);
+						spr2.setAlive(false);
+						breakAsteroid(spr2);
+					}
+					// Make ship temporarily invulnerable
+					else if (spr1.state() == STATE_EXPLODING) 
+					{
+						if (collisionTimer + 3000 < System.currentTimeMillis()) 
 						{
-							bullet[n].setState(STATE_COLLIDED);
-							ast[m].setState(STATE_COLLIDED);
-							explode.play();
+							spr1.setState(STATE_NORMAL);
 						}
 					}
 				}
-			}
-		}
+            	break;
+        }
+    }
 
-		/*
-		 * Check for collision asteroids and ship
-		 */
-		for(int m = 0; m < ASTEROIDS; m++)
-		{
-			if(ast[m].alive())
-			{
-				if(ship.collidesWith(ast[m]))
-				{
-					ast[m].setState(STATE_COLLIDED);
-					ship.setState(STATE_COLLIDED);
-					explode.play();
-				}
-			}
-		}
-	}
-
-	public void handleShipCollisions()
+    /*****************************************************
+     * gameKeyDown event passed by game engine
+     *****************************************************/
+    public void gameKeyDown(int keyCode) 
 	{
-		if(ship.state() == STATE_COLLIDED)
-		{
-			collisionTimer = System.currentTimeMillis();
-			ship.setVelocity(new Point2D(0, 0));
-			ship.setState(STATE_EXPLODING);
-			startExplosion(ship);
-		}
-		else if(ship.state() == STATE_EXPLODING)
-		{
-			if(collisionTimer + 3000 < System.currentTimeMillis())
-			{
-				ship.setState(STATE_NORMAL);
-			}
-		}
-	}
-
-	public void startExplosion(Sprite sprite)
-	{
-		if(!explosion.alive())
-		{
-			double x = sprite.position().X() - sprite.getBounds().width / 2;
-			double y = sprite.position().Y() - sprite.getBounds().height / 2;
-			explosion.setPosition(new Point2D(x, y));
-			explosion.setCurrentFrame(0);
-			explosion.setAlive(true);
-		}
-	}
-
-	public void handleBulletCollisions()
-	{
-		for(int n = 0; n < BULLETS; n++)
-		{
-			if(bullet[n].state() == STATE_COLLIDED)
-			{
-				// Nothing to do yet
-			}
-		}
-	}
-
-	public void handleAsteroidCollisions()
-	{
-		for(int n = 0; n < ASTEROIDS; n++)
-		{
-			if(ast[n].state() == STATE_COLLIDED)
-			{
-				// Nothing to do yet
-			}
-		}
-	}
-
-	/*
-	 * Process keys that have been pressed
-	 */
-	public void checkInput()
-	{
-		if(keyLeft)
-		{
-			// Left arrow rotates ship left 5 degrees
-			ship.setFaceAngle(ship.faceAngle() - 5);
-			if(ship.faceAngle() < 0) ship.setFaceAngle(360 - 5);
-		}
-		else if(keyRight)
-		{
-			// Right arrow rotates ship right 5 degrees
-			ship.setFaceAngle(ship.faceAngle() + 5);
-			if(ship.faceAngle() > 360) ship.setFaceAngle(5);
-		}
-
-		if(keyUp)
-		{
-			// Up arrow applies thrust to ship
-			applyThrust();
-		}
-	}
-	
-	/*
-	 * Key listener events
-	 */
-	public void keyTyped(KeyEvent k) { }
-	public void keyPressed(KeyEvent k)
-	{
-		switch(k.getKeyCode())
+        switch(keyCode) 
 		{
 			case KeyEvent.VK_LEFT:
 				keyLeft = true;
@@ -581,20 +323,24 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 				break;
 			case KeyEvent.VK_CONTROL:
 				keyFire = true;
+				break;
 			case KeyEvent.VK_B:
-				// Toogle bounding rectangles
+				// Toggle bounding rectangles
 				showBounds = !showBounds;
 				break;
 			case KeyEvent.VK_C:
 				// Toggle collision testing
 				collisionTesting = !collisionTesting;
 				break;
-		}
-	}
+        }
+    }
 
-	public void keyReleased(KeyEvent k) 
-	{ 
-		switch(k.getKeyCode())
+    /*****************************************************
+     * gameKeyUp event passed by game engine
+     *****************************************************/
+    public void gameKeyUp(int keyCode) 
+	{
+        switch(keyCode) 
 		{
 			case KeyEvent.VK_LEFT:
 				keyLeft = false;
@@ -608,65 +354,335 @@ public class GalacticWar extends Applet implements Runnable, KeyListener
 			case KeyEvent.VK_CONTROL:
 				keyFire = false;
 				fireBullet();
-		}
-	}
+				break;
+        }
+    }
 
-	public void applyThrust()
+    /*****************************************************
+     * Mouse events passed by game engine
+     * the game is not currently using mouse input
+     *****************************************************/
+    public void gameMouseDown() { }
+    public void gameMouseUp() { }
+    public void gameMouseMove() { }
+
+    /*****************************************************
+     * Break up an asteroid into smaller pieces
+     *****************************************************/
+    private void breakAsteroid(AnimatedSprite sprite) 
 	{
-		// Up arrow adds thrust to ship (1/10 normal speed)
-		ship.setMoveAngle(ship.faceAngle() - 90);
+        switch(sprite.spriteType()) 
+		{
+			case SPRITE_ASTEROID_BIG:
+				// Spawn medium asteroids over the old one
+				spawnAsteroid(sprite);
+				spawnAsteroid(sprite);
+				spawnAsteroid(sprite);
+				// Draw big explosion
+				startBigExplosion(sprite.position());
+				break;
+			case SPRITE_ASTEROID_MEDIUM:
+				// Spawn small asteroids over the old one
+				spawnAsteroid(sprite);
+				spawnAsteroid(sprite);
+				spawnAsteroid(sprite);
+				// Draw small explosion
+				startSmallExplosion(sprite.position());
+				break;
+			case SPRITE_ASTEROID_SMALL:
+				// Spawn tiny asteroids over the old one
+				spawnAsteroid(sprite);
+				spawnAsteroid(sprite);
+				spawnAsteroid(sprite);
+				// Draw small explosion
+				startSmallExplosion(sprite.position());
+				break;
+			case SPRITE_ASTEROID_TINY:
+				// Spawn a random powerup
+				spawnPowerup(sprite);
+				// Draw small explosion
+				startSmallExplosion(sprite.position());
+				break;
+        }
+    }
 
-		// Calculate the X and Y velocity based on angle
-		double velx = ship.velocity().X();
-		velx += calcAngleMoveX(ship.moveAngle()) * ACCELERATION;
-		double vely = ship.velocity().Y();
-		vely += calcAngleMoveY(ship.moveAngle()) * ACCELERATION;
-		ship.setVelocity(new Point2D(velx, vely));
-	}
-
-	public void fireBullet()
+    /*****************************************************
+     * Spawn a smaller asteroid based on passed sprite
+     *****************************************************/
+    private void spawnAsteroid(AnimatedSprite sprite) 
 	{
-		// Fire a bullet
-		currentBullet++;
-		if(currentBullet > BULLETS - 1) currentBullet = 0;
-		bullet[currentBullet].setAlive(true);
+        // Create a new asteroid sprite
+        AnimatedSprite ast = new AnimatedSprite(this, graphics());
+        ast.setAlive(true);
 
-		// Set bullet's starting point
-		int w = bullet[currentBullet].imageWidth();
-		int h = bullet[currentBullet].imageHeight();
-		double x = ship.center().X() - w/2;
-		double y = ship.center().Y() - h/2;
-		bullet[currentBullet].setPosition(new Point2D(x, y));
+        // Set pseudo-random position around source sprite
+        int w = sprite.getBounds().width;
+        int h = sprite.getBounds().height;
+        double x = sprite.position().X() + w/2 + rand.nextInt(20)-40;
+        double y = sprite.position().Y() + h/2 + rand.nextInt(20)-40;
+        ast.setPosition(new Point2D(x,y));
 
-		// Point bullet in same direction ship is facing
-		bullet[currentBullet].setFaceAngle(ship.faceAngle());
-		bullet[currentBullet].setMoveAngle(ship.faceAngle() - 90);
+        // Set rotation and direction angles
+        ast.setFaceAngle(rand.nextInt(360));
+        ast.setMoveAngle(rand.nextInt(360));
+        ast.setRotationRate(rand.nextDouble());
 
-		// Fire bullet at angle of the ship
-		double angle = bullet[currentBullet].moveAngle();
-		double svx = calcAngleMoveX(angle) * BULLET_SPEED;
-		double svy = calcAngleMoveY(angle) * BULLET_SPEED;
-		bullet[currentBullet].setVelocity(new Point2D(svx, svy));
-		
-		// Play shoot sound
-		shoot.play();
-	}
-	
-	/*
-	 * Calculate X movement value based on direction angle
-	 */
-	public double calcAngleMoveX(double angle)
+        // Set velocity based on movement direction
+        double ang = ast.moveAngle() - 90;
+        double velx = calcAngleMoveX(ang);
+        double vely = calcAngleMoveY(ang);
+        ast.setVelocity(new Point2D(velx, vely));
+
+        // Set some size-specific properties
+        switch(sprite.spriteType()) 
+		{
+			case SPRITE_ASTEROID_BIG:
+				ast.setSpriteType(SPRITE_ASTEROID_MEDIUM);
+
+				// Pick one of the random asteroid images
+				int i = rand.nextInt(2);
+				ast.setImage(medAsteroids[i].getImage());
+				ast.setFrameWidth(medAsteroids[i].width());
+				ast.setFrameHeight(medAsteroids[i].height());
+
+				break;
+			case SPRITE_ASTEROID_MEDIUM:
+				ast.setSpriteType(SPRITE_ASTEROID_SMALL);
+
+				// Pick one of the random asteroid images
+				i = rand.nextInt(3);
+				ast.setImage(smlAsteroids[i].getImage());
+				ast.setFrameWidth(smlAsteroids[i].width());
+				ast.setFrameHeight(smlAsteroids[i].height());
+				break;
+
+			case SPRITE_ASTEROID_SMALL:
+				ast.setSpriteType(SPRITE_ASTEROID_TINY);
+
+				// Pick one of the random asteroid images
+				i = rand.nextInt(4);
+				ast.setImage(tnyAsteroids[i].getImage());
+				ast.setFrameWidth(tnyAsteroids[i].width());
+				ast.setFrameHeight(tnyAsteroids[i].height());
+				break;
+        }
+
+         // Add the new asteroid to the sprite list
+        sprites().add(ast);
+    }
+
+    /*****************************************************
+     * Create a random powerup at the supplied sprite location
+     * (this will be implemented in the next chapter)
+     *****************************************************/
+    private void spawnPowerup(AnimatedSprite sprite) 
 	{
-		double movex = Math.cos(angle * Math.PI / 180);
-		return movex;
-	}
-	
-	/*
-	 * Calculate Y movement value based on direction angle
-	 */
-	public double calcAngleMoveY(double angle)
+
+    }
+
+    /*****************************************************
+     * Create a random "big" asteroid
+     *****************************************************/
+    public void createAsteroid() 
 	{
-		double movey = Math.sin(angle * Math.PI / 180);
-		return movey;
-	}
+        // Create a new asteroid sprite
+        AnimatedSprite ast = new AnimatedSprite(this, graphics());
+        ast.setAlive(true);
+        ast.setSpriteType(SPRITE_ASTEROID_BIG);
+
+        // Pick one of the random asteroid images
+        int i = rand.nextInt(5);
+        ast.setImage(bigAsteroids[i].getImage());
+        ast.setFrameWidth(bigAsteroids[i].width());
+        ast.setFrameHeight(bigAsteroids[i].height());
+
+        // Set to a random position on the screen
+        int x = rand.nextInt(SCREENWIDTH-128);
+        int y = rand.nextInt(SCREENHEIGHT-128);
+        ast.setPosition(new Point2D(x, y));
+
+        // Set rotation and direction angles
+        ast.setFaceAngle(rand.nextInt(360));
+        ast.setMoveAngle(rand.nextInt(360));
+        ast.setRotationRate(rand.nextDouble());
+
+        // Set velocity based on movement direction
+        double ang = ast.moveAngle() - 90;
+        double velx = calcAngleMoveX(ang);
+        double vely = calcAngleMoveY(ang);
+        ast.setVelocity(new Point2D(velx, vely));
+
+        // Add the new asteroid to the sprite list
+        sprites().add(ast);
+    }
+
+    /*****************************************************
+     * Returns true if passed sprite type is an asteroid type
+     *****************************************************/
+    private boolean isAsteroid(int spriteType) 
+	{
+        switch(spriteType) 
+		{
+			case SPRITE_ASTEROID_BIG:
+			case SPRITE_ASTEROID_MEDIUM:
+			case SPRITE_ASTEROID_SMALL:
+			case SPRITE_ASTEROID_TINY:
+				return true;
+			default:
+				return false;
+        }
+    }
+
+    /*****************************************************
+     * Process keys that have been pressed
+     *****************************************************/
+    public void checkInput() 
+	{
+        // The ship is always the first sprite in the linked list
+        AnimatedSprite ship = (AnimatedSprite)sprites().get(0);
+        if (keyLeft) 
+		{
+            // Left arrow rotates ship left 5 degrees
+            ship.setFaceAngle(ship.faceAngle() - SHIPROTATION);
+            if (ship.faceAngle() < 0)
+                ship.setFaceAngle(360 - SHIPROTATION);
+
+        } 
+		else if (keyRight) 
+		{
+            // Right arrow rotates ship right 5 degrees
+            ship.setFaceAngle(ship.faceAngle() + SHIPROTATION);
+            if (ship.faceAngle() > 360)
+                ship.setFaceAngle(SHIPROTATION);
+        }
+
+        if (keyUp) 
+		{
+            // Up arrow applies thrust to ship
+            ship.setImage(shipImage[1].getImage());
+            applyThrust();
+        }
+        else
+            // Set ship image to normal non-thrust image
+            ship.setImage(shipImage[0].getImage());
+    }
+
+    /*****************************************************
+     * Increase the thrust of the ship based on facing angle
+     *****************************************************/
+    public void applyThrust() 
+	{
+        // The ship is always the first sprite in the linked list
+        AnimatedSprite ship = (AnimatedSprite)sprites().get(0);
+
+        // Up arrow adds thrust to ship (1/10 normal speed)
+        ship.setMoveAngle(ship.faceAngle() - 90);
+
+        // Calculate the X and Y velocity based on angle
+        double velx = ship.velocity().X();
+        velx += calcAngleMoveX(ship.moveAngle()) * ACCELERATION;
+        if (velx < -10) velx = -10;
+        else if (velx > 10) velx = 10;
+        double vely = ship.velocity().Y();
+        vely += calcAngleMoveY(ship.moveAngle()) * ACCELERATION;
+        if (vely < -10) vely = -10;
+        else if (vely > 10) vely = 10;
+        ship.setVelocity(new Point2D(velx, vely));
+    }
+
+    /*****************************************************
+     * Fire a bullet from the ship's position and orientation
+     *****************************************************/
+    public void fireBullet() 
+	{
+        // The ship is always the first sprite in the linked list
+        AnimatedSprite ship = (AnimatedSprite)sprites().get(0);
+
+        // Create the new bullet sprite
+        AnimatedSprite bullet = new AnimatedSprite(this,graphics());
+        bullet.setImage(bulletImage.getImage());
+        bullet.setFrameWidth(bulletImage.width());
+        bullet.setFrameHeight(bulletImage.height());
+        bullet.setSpriteType(SPRITE_BULLET);
+        bullet.setAlive(true);
+        bullet.setLifespan(200);
+        bullet.setFaceAngle(ship.faceAngle());
+        bullet.setMoveAngle(ship.faceAngle() - 90);
+
+        // Set the bullet's starting position
+        double x = ship.center().X() - bullet.imageWidth()/2;
+        double y = ship.center().Y() - bullet.imageHeight()/2;
+        bullet.setPosition(new Point2D(x,y));
+
+        // Set the bullet's velocity
+        double angle = bullet.moveAngle();
+        double svx = calcAngleMoveX(angle) * BULLET_SPEED;
+        double svy = calcAngleMoveY(angle) * BULLET_SPEED;
+        bullet.setVelocity(new Point2D(svx, svy));
+
+        // Add bullet to the sprite list
+        sprites().add(bullet);
+    }
+
+    /*****************************************************
+     * Launch a big explosion at the passed location
+     *****************************************************/
+    public void startBigExplosion(Point2D point) 
+	{
+        // Create a new explosion at the passed location
+        AnimatedSprite expl = new AnimatedSprite(this,graphics());
+        expl.setSpriteType(SPRITE_EXPLOSION);
+        expl.setAlive(true);
+        expl.setAnimImage(explosions[0].getImage());
+        expl.setTotalFrames(16);
+        expl.setColumns(4);
+        expl.setFrameWidth(96);
+        expl.setFrameHeight(96);
+        expl.setFrameDelay(2);
+        expl.setPosition(point);
+
+        // Add the new explosion to the sprite list
+        sprites().add(expl);
+    }
+
+    /*****************************************************
+     * Launch a small explosion at the passed location
+     *****************************************************/
+    public void startSmallExplosion(Point2D point) 
+	{
+        // Create a new explosion at the passed location
+        AnimatedSprite expl = new AnimatedSprite(this,graphics());
+        expl.setSpriteType(SPRITE_EXPLOSION);
+        expl.setAlive(true);
+        expl.setAnimImage(explosions[1].getImage());
+        expl.setTotalFrames(8);
+        expl.setColumns(4);
+        expl.setFrameWidth(40);
+        expl.setFrameHeight(40);
+        expl.setFrameDelay(2);
+        expl.setPosition(point);
+
+        // Add the new explosion to the sprite list
+        sprites().add(expl);
+    }
+
+    /*****************************************************
+     * Cause sprite to warp around the edges of the screen
+     *****************************************************/
+    public void warp(AnimatedSprite spr) 
+	{
+        // Create some shortcut variables
+        int w = spr.frameWidth()-1;
+        int h = spr.frameHeight()-1;
+
+        // Wrap the sprite around the screen edges
+        if (spr.position().X() < 0-w)
+            spr.position().setX(SCREENWIDTH);
+        else if (spr.position().X() > SCREENWIDTH)
+            spr.position().setX(0-w);
+        if (spr.position().Y() < 0-h)
+            spr.position().setY(SCREENHEIGHT);
+        else if (spr.position().Y() > SCREENHEIGHT)
+            spr.position().setY(0-h);
+    }
 }

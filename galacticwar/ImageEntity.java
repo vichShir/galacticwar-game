@@ -77,13 +77,12 @@ public class ImageEntity extends BaseGameEntity
 
     public void load(String filename)
     {
-        image = applet.getImage(getURL(filename));
-        while(getImage().getWidth(applet) <= 0)
-        {
-            double x = applet.getSize().width/2 - width()/2;
-            double y = applet.getSize().height/2 - height()/2;
-            at = AffineTransform.getTranslateInstance(x, y);
-        }
+        Toolkit tk = Toolkit.getDefaultToolkit();
+        image = tk.getImage(getURL(filename));
+        while(getImage().getWidth(applet) <= 0);
+        double x = applet.getSize().width/2  - width()/2;
+        double y = applet.getSize().height/2 - height()/2;
+        at = AffineTransform.getTranslateInstance(x, y);
     }
 
     public void transform()
