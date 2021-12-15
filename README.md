@@ -3,11 +3,11 @@
 ### 📃 Descrição
 O objetivo do projeto é desenvolver um game inspirado no clássico Asteroids da Atari com Java. O projeto foi retirado do livro **Programação de Games com Java** - Tradução da 2º Edição Norte-Americana de **Jonathan S. Harbour**.
 
-#### Java 7
+#### ☕ Java 7
 
 O livro foi publicado em 2010 e utiliza **Java Applets** como forma de processamento gráfico do game. Contudo, [**Applets**](https://docs.oracle.com/javase/7/docs/api/java/applet/Applet.html) em Java foram descontinuados após a versão Java 7. Por isso, este projeto baseia-se na versão **Java 7** que é a última suportada para **Applets**.
 
-#### Instruções (Windows)
+#### 🪛 Como configurar (Windows)
 
 1. Instale a [**versão 7**](https://www.oracle.com/br/java/technologies/javase/javase7-archive-downloads.html) do Java ou qualquer outra versão que suporte **Applets**.
 
@@ -71,3 +71,6 @@ Neste momento, no ano de **2021** com 19 anos de idade, percebo **o quanto que e
 Mesmo achando que sabemos o suficiente, talvez não sabemos que há mais o que explorar.
 
 <p align="center"><img src="images\livro-programação-de-games-com-java.jpg" alt="Programação de Games com Java Tradução da 2º Edição Norte-Americana de Jonathan S. Harbour" width="300"></p>
+
+### 📖 Referências
+* HARBOUR, Jonathan S.. Programação de Games com Java. 2. ed. São Paulo, Sp: Cengage Learning, 2010.
